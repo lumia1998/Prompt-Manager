@@ -40,7 +40,11 @@ def index():
         query = query.filter(Image.tags.any(name=tag_filter))
 
     if search_query:
-        query = query.filter(Image.title.contains(search_query) | Image.prompt.contains(search_query))
+        query = query.filter(
+            Image.title.contains(search_query) | 
+            Image.prompt.contains(search_query) |
+            Image.author.contains(search_query)
+        )
 
     # 排序
     if sort_by == 'hot':
