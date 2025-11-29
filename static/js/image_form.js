@@ -1,10 +1,6 @@
 /**
  * static/js/image_form.js
- * 负责上传和编辑页面的表单交互逻辑：
- * 1. 拖拽排序 (SortableJS)
- * 2. 多图上传预览
- * 3. 标签输入交互
- * 4. 表单提交预处理
+ * 负责上传和编辑页面的表单交互逻辑
  */
 
 document.addEventListener('DOMContentLoaded', function() {
@@ -13,8 +9,8 @@ document.addEventListener('DOMContentLoaded', function() {
     const form = document.getElementById('imageForm');
     if (!form) return;
 
-    // --- DOM Elements ---
-    const mode = form.getAttribute('data-mode'); // 'create' or 'edit'
+    // DOM Elements
+    const mode = form.getAttribute('data-mode');
     const submitBtn = document.getElementById('submitBtn');
 
     // Type Selection
@@ -40,7 +36,7 @@ document.addEventListener('DOMContentLoaded', function() {
     let deletedRefIds = [];
     let tags = [];
 
-    // --- Initialization ---
+    // Initialization
     function init() {
         if (mode === 'edit') {
             try {
@@ -50,10 +46,13 @@ document.addEventListener('DOMContentLoaded', function() {
 
                 // Restore reference images
                 const existingRefs = JSON.parse(form.getAttribute('data-existing-refs') || '[]');
-                const existingRefIds = JSON.parse(form.getAttribute('data-existing-ref-ids') || '[]');
 
-                existingRefs.forEach((url, idx) => {
-                    appendExistingRef(url, existingRefIds[idx]);
+                existingRefs.forEach((ref) => {
+                    if (ref.is_placeholder) {
+                        appendPlaceholder(ref.id, 'existing');
+                    } else {
+                        appendExistingRef(ref.file_path, ref.id);
+                    }
                 });
             } catch (e) { console.error('Data restore failed:', e); }
         } else if (realTagsInput.value) {
@@ -64,9 +63,94 @@ document.addEventListener('DOMContentLoaded', function() {
         checkRefEmptyState();
         initSortable();
         updateIndices();
+        initDragAndDrop();
     }
 
-    // --- Type Toggling ---
+    // Drag and Drop Logic
+    function initDragAndDrop() {
+        const dropZones = [
+            { el: document.querySelector('.upload-zone'), type: 'main' },
+            { el: document.getElementById('refContainer'), type: 'ref' }
+        ];
+
+        dropZones.forEach(zone => {
+            if (!zone.el) return;
+
+            zone.el.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                if (e.dataTransfer.types && e.dataTransfer.types.indexOf('Files') !== -1) {
+                    zone.el.classList.add('drag-active');
+                    e.dataTransfer.dropEffect = 'copy';
+                } else {
+                    zone.el.classList.remove('drag-active');
+                }
+            });
+
+            zone.el.addEventListener('dragleave', (e) => {
+                e.preventDefault();
+                zone.el.classList.remove('drag-active');
+            });
+
+            zone.el.addEventListener('drop', (e) => {
+                if (e.dataTransfer.types && e.dataTransfer.types.indexOf('Files') !== -1) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    zone.el.classList.remove('drag-active');
+
+                    const files = e.dataTransfer.files;
+                    if (files.length === 0) return;
+
+                    if (zone.type === 'main') {
+                        const mainInput = document.getElementById('mainImageInput');
+                        const dt = new DataTransfer();
+                        dt.items.add(files[0]);
+                        mainInput.files = dt.files;
+                        mainInput.dispatchEvent(new Event('change'));
+                    } else if (zone.type === 'ref') {
+                        handleRefFiles(files);
+                    }
+                }
+            });
+        });
+    }
+
+    // Placeholder Logic
+    function appendPlaceholder(idOrUid, type) {
+        const div = document.createElement('div');
+        div.className = 'draggable-item position-relative d-inline-block rounded-3 overflow-hidden shadow-sm bg-light border border-2 border-secondary';
+        div.style.borderStyle = 'dashed !important';
+        div.style.width = '100px'; div.style.height = '100px';
+
+        div.setAttribute('data-type', type === 'existing' ? 'existing-placeholder' : 'placeholder');
+
+        if (type === 'existing') {
+            div.setAttribute('data-ref-id', idOrUid);
+        } else {
+            div.setAttribute('data-uid', idOrUid);
+        }
+
+        div.innerHTML = `
+            <div class="w-100 h-100 d-flex flex-column align-items-center justify-content-center text-secondary opacity-75">
+                <i class="bi bi-person-bounding-box fs-3 mb-1"></i>
+                <span class="x-small fw-bold">{{User}}</span>
+            </div>
+            <div class="btn-remove-ref" title="移除"><i class="bi bi-x pointer-events-none"></i></div>
+            <div class="index-badge"></div>
+        `;
+
+        refContainer.insertBefore(div, refEmptyMsg);
+    }
+
+    if (document.getElementById('btnAddPlaceholder')) {
+        document.getElementById('btnAddPlaceholder').addEventListener('click', function() {
+            const uid = 'ph_' + Date.now();
+            appendPlaceholder(uid, 'new');
+            checkRefEmptyState();
+            updateIndices();
+        });
+    }
+
+    // Type Toggling
     function toggleType(type) {
         if (type === 'txt2img') {
             cardTxt2Img.classList.add('active');
@@ -78,7 +162,6 @@ document.addEventListener('DOMContentLoaded', function() {
             cardTxt2Img.classList.remove('active');
             cardImg2Img.querySelector('input').checked = true;
             refUploadArea.classList.remove('d-none');
-            // Animation
             refUploadArea.animate([
                 { opacity: 0, transform: 'translateY(-10px)' },
                 { opacity: 1, transform: 'translateY(0)' }
@@ -89,7 +172,7 @@ document.addEventListener('DOMContentLoaded', function() {
     if(cardTxt2Img) cardTxt2Img.addEventListener('click', () => toggleType('txt2img'));
     if(cardImg2Img) cardImg2Img.addEventListener('click', () => toggleType('img2img'));
 
-    // --- Main Image Preview ---
+    // Main Image Preview
     const mainInput = document.getElementById('mainImageInput');
     if (mainInput) {
         mainInput.addEventListener('change', function() {
@@ -106,26 +189,29 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // --- Reference Images Logic ---
+    // Reference Images Logic
     if (btnAddRef && tempRefInput) {
         btnAddRef.addEventListener('click', () => tempRefInput.click());
 
         tempRefInput.addEventListener('change', function() {
             if (!this.files.length) return;
-
-            Array.from(this.files).forEach(file => {
-                // Assign temporary UID for tracking
-                file._uid = Date.now() + Math.random().toString(36).substr(2, 9);
-                newRefFiles.push(file);
-                const imgUrl = URL.createObjectURL(file);
-                appendRefPreview(imgUrl, file._uid);
-            });
-
-            checkRefEmptyState();
-            syncNewFilesInput();
-            updateIndices();
+            handleRefFiles(this.files);
             this.value = '';
         });
+    }
+
+    function handleRefFiles(files) {
+        Array.from(files).forEach(file => {
+            if (!file.type.startsWith('image/')) return;
+            file._uid = Date.now() + Math.random().toString(36).substr(2, 9);
+            newRefFiles.push(file);
+            const imgUrl = URL.createObjectURL(file);
+            appendRefPreview(imgUrl, file._uid);
+        });
+
+        checkRefEmptyState();
+        syncNewFilesInput();
+        updateIndices();
     }
 
     function appendExistingRef(url, id) {
@@ -163,10 +249,10 @@ document.addEventListener('DOMContentLoaded', function() {
             const item = btn.closest('.draggable-item');
             const type = item.getAttribute('data-type');
 
-            if (type === 'existing') {
+            if (type === 'existing' || type === 'existing-placeholder') {
                 deletedRefIds.push(item.getAttribute('data-ref-id'));
                 document.getElementById('deletedRefIds').value = deletedRefIds.join(',');
-            } else {
+            } else if (type === 'new') {
                 const uid = item.getAttribute('data-uid');
                 const img = item.querySelector('img');
                 if(img && img.src.startsWith('blob:')) URL.revokeObjectURL(img.src);
@@ -179,7 +265,6 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // Update Visual Indices (1, 2, 3...)
     function updateIndices() {
         const items = Array.from(refContainer.querySelectorAll('.draggable-item'))
                            .filter(el => el.style.display !== 'none');
@@ -190,7 +275,6 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // Sync DataTransfer for Input[type=file]
     function syncNewFilesInput() {
         if (!finalRefInput) return;
         const newOrder = [];
@@ -201,7 +285,6 @@ document.addEventListener('DOMContentLoaded', function() {
         });
         newRefFiles = newOrder;
 
-        // Reconstruct FileList
         const dt = new DataTransfer();
         newRefFiles.forEach(f => dt.items.add(f));
         finalRefInput.files = dt.files;
@@ -229,7 +312,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    // --- Tag Logic ---
+    // Tag Logic
     function renderTags() {
         tagContainer.querySelectorAll('.tag-pill').forEach(el => el.remove());
         tags.forEach((tag, index) => {
@@ -264,7 +347,7 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // --- Form Submission ---
+    // Form Submission
     form.addEventListener('submit', function() {
         if (submitBtn) {
             setTimeout(() => {
@@ -273,12 +356,15 @@ document.addEventListener('DOMContentLoaded', function() {
             }, 0);
         }
 
-        // Calculate final layout for backend
         const layout = [];
         refContainer.querySelectorAll('.draggable-item').forEach(el => {
             const type = el.getAttribute('data-type');
             if (type === 'existing') {
                 layout.push(`existing:${el.getAttribute('data-ref-id')}`);
+            } else if (type === 'existing-placeholder') {
+                layout.push(`existing:${el.getAttribute('data-ref-id')}`);
+            } else if (type === 'placeholder') {
+                layout.push('placeholder');
             } else {
                 layout.push('new');
             }
@@ -288,6 +374,5 @@ document.addEventListener('DOMContentLoaded', function() {
         syncNewFilesInput();
     });
 
-    // Run
     init();
 });

@@ -15,23 +15,22 @@ def can_see_sensitive():
     return request.cookies.get('pm_show_sensitive') == '1'
 
 
-@bp.route('/')
-def index():
-    """画廊主页"""
+def _get_common_data(category_filter=None):
+    """
+    提取画廊和模板页通用的查询逻辑
+    :param category_filter: None(所有) 或 'template'(仅模板)
+    """
     page = request.args.get('page', 1, type=int)
     tag_filter = request.args.get('tag', '').strip()
     search_query = request.args.get('q', '').strip()
     sort_by = request.args.get('sort', 'date')
     show_sensitive = can_see_sensitive()
 
-    # 标签列表（仅显示有发布作品的标签）
-    tags_query = db.session.query(Tag).join(Tag.images).filter(Image.status == 'approved')
-    if not show_sensitive:
-        tags_query = tags_query.filter(Tag.is_sensitive == False)
-    all_tags = tags_query.group_by(Tag.id).order_by(Tag.name).all()
-
-    # 构建查询
+    # 构建图片查询
     query = Image.query.filter_by(status='approved')
+
+    if category_filter:
+        query = query.filter_by(category=category_filter)
 
     if not show_sensitive:
         query = query.filter(~Image.tags.any(Tag.is_sensitive == True))
@@ -41,7 +40,7 @@ def index():
 
     if search_query:
         query = query.filter(
-            Image.title.contains(search_query) | 
+            Image.title.contains(search_query) |
             Image.prompt.contains(search_query) |
             Image.author.contains(search_query)
         )
@@ -56,13 +55,39 @@ def index():
 
     pagination = query.paginate(page=page, per_page=current_app.config['ITEMS_PER_PAGE'])
 
-    return render_template('index.html',
-                           images=pagination.items,
-                           pagination=pagination,
-                           active_tag=tag_filter,
-                           active_search=search_query,
-                           all_tags=all_tags,
-                           current_sort=sort_by)
+    # 构建标签筛选列表
+    tags_query = db.session.query(Tag).join(Tag.images).filter(Image.status == 'approved')
+
+    if category_filter:
+        tags_query = tags_query.filter(Image.category == category_filter)
+
+    if not show_sensitive:
+        tags_query = tags_query.filter(Tag.is_sensitive == False)
+
+    all_tags = tags_query.group_by(Tag.id).order_by(Tag.name).all()
+
+    return {
+        'images': pagination.items,
+        'pagination': pagination,
+        'active_tag': tag_filter,
+        'active_search': search_query,
+        'all_tags': all_tags,
+        'current_sort': sort_by
+    }
+
+
+@bp.route('/')
+def index():
+    """画廊主页"""
+    data = _get_common_data(category_filter=None)
+    return render_template('index.html', **data)
+
+
+@bp.route('/templates')
+def templates_index():
+    """模板库"""
+    data = _get_common_data(category_filter='template')
+    return render_template('index.html', **data)
 
 
 @bp.route('/upload', methods=['GET', 'POST'])
@@ -97,8 +122,14 @@ def api_list():
     """获取作品列表 API"""
     page = request.args.get('page', 1, type=int)
     per_page = min(request.args.get('per_page', 100, type=int), 1000)
+    category = request.args.get('category')
 
-    query = Image.query.filter_by(status='approved').order_by(Image.created_at.desc())
+    query = Image.query.filter_by(status='approved')
+
+    if category:
+        query = query.filter_by(category=category)
+
+    query = query.order_by(Image.created_at.desc())
     pagination = query.paginate(page=page, per_page=per_page, error_out=False)
 
     return jsonify({

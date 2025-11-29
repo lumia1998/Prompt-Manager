@@ -1,17 +1,15 @@
 /**
  * static/js/gallery.js
  * 画廊页面核心交互逻辑：详情弹窗、统计打点、剪贴板复制。
- * (Fixed: 修复字段名与后端 to_dict() 不匹配的问题)
  */
 
 document.addEventListener("DOMContentLoaded", function() {
-    // 1. 初始化主题
     const savedTheme = localStorage.getItem('theme') || 'light';
     document.documentElement.setAttribute('data-theme', savedTheme);
     updateThemeIcon(savedTheme);
 });
 
-// --- 主题切换 ---
+// Theme Toggle
 function toggleTheme() {
     const current = document.documentElement.getAttribute('data-theme');
     const target = current === 'dark' ? 'light' : 'dark';
@@ -25,28 +23,23 @@ function updateThemeIcon(theme) {
     if(icon) icon.className = theme === 'dark' ? 'bi bi-sun-fill' : 'bi bi-moon-stars-fill';
 }
 
-// --- 详情弹窗逻辑 ---
+// Detail Modal
 window.showDetail = function(el) {
     try {
         const scriptTag = el.querySelector('.img-data');
         if (!scriptTag) return;
         const data = JSON.parse(scriptTag.textContent);
 
-        // 填充基本信息
         const modalImg = document.getElementById('modalImg');
-        // ✨ [修复 1] 使用 file_path 替代 src
         modalImg.src = data.file_path;
 
         document.getElementById('modalTitle').innerText = data.title;
         document.getElementById('modalAuthor').innerText = data.author ? 'by ' + data.author : '';
         document.getElementById('modalPrompt').innerText = data.prompt;
 
-        // 记录当前 ID 用于复制统计
         window.currentImgId = data.id;
 
-        // 填充描述
         const descSection = document.getElementById('modalDescSection');
-        // ✨ [修复 2] 使用 description 替代 desc
         if (data.description && data.description.trim() !== '') {
             descSection.classList.remove('d-none');
             document.getElementById('modalDesc').innerText = data.description;
@@ -54,54 +47,67 @@ window.showDetail = function(el) {
             descSection.classList.add('d-none');
         }
 
-        // 填充标签
         const tagsContainer = document.getElementById('modalTags');
         tagsContainer.innerHTML = '';
         data.tags.forEach(tag => {
             tagsContainer.innerHTML += `<span class="badge rounded-pill fw-normal border me-1" style="background:var(--btn-bg); color:var(--text-primary); border-color: rgba(128,128,128,0.2) !important;">${tag}</span>`;
         });
 
-        // 填充参考图
         const refsSection = document.getElementById('modalRefsSection');
         const refsContainer = document.getElementById('modalRefs');
         refsContainer.innerHTML = '';
-        if (data.refs.length > 0) {
+
+        if (data.refs && data.refs.length > 0) {
             refsSection.classList.remove('d-none');
-            // 添加原图缩略 (点击切换回原图)
-            // ✨ [修复 3] 这里的 onclick 事件中也要用 data.file_path
+
+            // Original Image
             refsContainer.innerHTML += `
             <div class="d-flex flex-column align-items-center cursor-pointer me-2" onclick="document.getElementById('modalImg').src='${data.file_path}'">
                 <img src="${data.file_path}" class="rounded border mb-1" style="width:60px;height:60px;object-fit:cover;">
-                <span style="font-size:0.6rem;color:var(--text-secondary);">Original</span>
+                <span style="font-size:0.6rem;color:var(--text-secondary);">原图</span>
             </div>`;
 
-            // 添加参考图 (点击切换为参考图)
-            data.refs.forEach((rSrc, idx) => {
-                refsContainer.innerHTML += `
-                <div class="d-flex flex-column align-items-center cursor-pointer me-1" onclick="document.getElementById('modalImg').src='${rSrc}'">
-                    <img src="${rSrc}" class="rounded border mb-1" style="width:60px;height:60px;object-fit:cover;">
-                    <span style="font-size:0.6rem;color:var(--text-secondary);">Ref ${idx+1}</span>
-                </div>`;
+            // Reference Images
+            data.refs.forEach((ref, idx) => {
+                let innerHTML = '';
+
+                if (ref.is_placeholder) {
+                    innerHTML = `
+                    <div class="rounded border mb-1 d-flex flex-column align-items-center justify-content-center bg-light text-secondary"
+                         style="width:60px;height:60px; border-style: dashed !important;">
+                        <i class="bi bi-person-bounding-box" style="font-size: 1.2rem;"></i>
+                    </div>
+                    <span style="font-size:0.6rem;color:var(--text-secondary);">变量 ${idx+1}</span>`;
+                } else {
+                    innerHTML = `
+                    <img src="${ref.file_path}" class="rounded border mb-1" style="width:60px;height:60px;object-fit:cover;">
+                    <span style="font-size:0.6rem;color:var(--text-secondary);">Ref ${idx+1}</span>`;
+                }
+
+                const div = document.createElement('div');
+                div.className = 'd-flex flex-column align-items-center cursor-pointer me-1';
+                if (!ref.is_placeholder) {
+                    div.onclick = function() { document.getElementById('modalImg').src = ref.file_path; };
+                }
+                div.innerHTML = innerHTML;
+                refsContainer.appendChild(div);
             });
         } else {
             refsSection.classList.add('d-none');
         }
 
-        // 发送浏览打点 (Beacon API 优先)
         const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
         if (navigator.sendBeacon && csrfToken) {
             const formData = new FormData();
             formData.append('csrf_token', csrfToken);
             navigator.sendBeacon(`/api/stats/view/${data.id}`, formData);
         } else {
-            // 降级方案
             fetch(`/api/stats/view/${data.id}`, {
                 method: 'POST',
                 headers: {'X-CSRFToken': csrfToken}
             }).catch(() => {});
         }
 
-        // 管理员操作按钮
         const adminSection = document.getElementById('admin-actions');
         if (window.UserContext && window.UserContext.isAdmin) {
             adminSection.classList.remove('d-none');
@@ -113,7 +119,6 @@ window.showDetail = function(el) {
             adminSection.classList.add('d-none');
         }
 
-        // 显示模态框
         if (typeof bootstrap !== 'undefined') {
             new bootstrap.Modal(document.getElementById('detailModal')).show();
         }
@@ -122,14 +127,13 @@ window.showDetail = function(el) {
     }
 }
 
-// --- 复制 Prompt 逻辑 ---
+// Copy Logic
 window.copyModalPrompt = function() {
     const node = document.getElementById('modalPrompt');
     const text = node.innerText || node.textContent;
     const btn = document.querySelector('#detailModal button[onclick="copyModalPrompt()"]');
 
     const onSuccess = () => {
-        // UI 反馈
         if(btn) {
             const originalContent = btn.innerHTML;
             btn.innerHTML = '<i class="bi bi-check-lg me-1"></i> Copied';
@@ -141,7 +145,6 @@ window.copyModalPrompt = function() {
                 btn.classList.add('btn-link');
             }, 2000);
         }
-        // 复制统计打点
         const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
         if (window.currentImgId && csrfToken) {
             fetch(`/api/stats/copy/${window.currentImgId}`, {
@@ -160,7 +163,6 @@ window.copyModalPrompt = function() {
     }
 }
 
-// 降级复制方案 (兼容性)
 function fallbackCopy(text, parentBtn, callback) {
     try {
         const textArea = document.createElement("textarea");

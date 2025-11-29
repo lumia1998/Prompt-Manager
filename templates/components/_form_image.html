@@ -1,16 +1,8 @@
-{#
-    组件: 作品上传/编辑表单
-    参数:
-    - mode: 'create' 或 'edit'
-    - image: Image对象 (编辑模式下传入)
-#}
-
 <form id="imageForm" method="POST" enctype="multipart/form-data"
       data-mode="{{ mode }}"
       {% if image %}
       data-existing-tags='{{ image.tags | map(attribute="name") | list | tojson }}'
-      data-existing-refs='{{ image.refs | map(attribute="file_path") | list | tojson }}'
-      data-existing-ref-ids='{{ image.refs | map(attribute="id") | list | tojson }}'
+      data-existing-refs='{{ image.to_dict().refs | tojson }}'
       {% endif %}
 >
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
@@ -21,30 +13,22 @@
     {% endif %}
     <input type="hidden" name="ref_layout" id="refLayoutInput">
 
-    <div class="mb-5 animate-up" style="animation-delay: 0.05s;">
-        <label class="form-label-apple text-secondary small text-uppercase ls-1 mb-3 d-block">
-            Work Type <span class="label-badge required">必选</span>
-        </label>
-        <div class="row g-3">
-            <div class="col-6">
-                <div class="type-selector-card p-4 text-center {{ 'active' if (image and image.type == 'txt2img') or not image else '' }}"
-                     data-type="txt2img">
-                    <div class="check-badge"><i class="bi bi-check-lg small"></i></div>
-                    <i class="bi bi-fonts mb-3 d-block opacity-75"></i>
-                    <span class="type-label">文生图 (Txt2Img)</span>
-                    <input type="radio" name="type" value="txt2img" class="d-none"
-                           {{ 'checked' if (image and image.type == 'txt2img') or not image else '' }}>
-                </div>
-            </div>
-            <div class="col-6">
-                <div class="type-selector-card p-4 text-center {{ 'active' if image and image.type == 'img2img' else '' }}"
-                     data-type="img2img">
-                    <div class="check-badge"><i class="bi bi-check-lg small"></i></div>
-                    <i class="bi bi-images mb-3 d-block opacity-75"></i>
-                    <span class="type-label">图生图 (Img2Img)</span>
-                    <input type="radio" name="type" value="img2img" class="d-none"
-                           {{ 'checked' if image and image.type == 'img2img' else '' }}>
-                </div>
+    <div class="mb-5 animate-up" style="animation-delay: 0.02s;">
+        <div class="d-flex align-items-center">
+            <label class="form-label-apple text-secondary small text-uppercase ls-1 mb-0 me-4">
+                发布位置
+            </label>
+
+            <div class="segmented-control-capsule">
+                <input type="radio" name="category" id="cat_gallery" value="gallery"
+                       {{ 'checked' if (not image) or image.category == 'gallery' else '' }}>
+                <label for="cat_gallery">画廊</label>
+
+                <input type="radio" name="category" id="cat_template" value="template"
+                       {{ 'checked' if image and image.category == 'template' else '' }}>
+                <label for="cat_template">模板</label>
+
+                <div class="indicator"></div>
             </div>
         </div>
     </div>
@@ -71,14 +55,47 @@
         </div>
     </div>
 
+    <div class="mb-5 animate-up" style="animation-delay: 0.12s;">
+        <label class="form-label-apple text-secondary small text-uppercase ls-1 mb-3 d-block">
+            创作类型
+        </label>
+        <div class="row g-3">
+            <div class="col-6">
+                <div class="type-selector-card p-3 text-center {{ 'active' if (image and image.type == 'txt2img') or not image else '' }}"
+                     data-type="txt2img">
+                    <div class="check-badge"><i class="bi bi-check-lg small"></i></div>
+                    <i class="bi bi-fonts mb-2 d-block opacity-75 fs-4"></i>
+                    <span class="type-label small">文生图</span>
+                    <input type="radio" name="type" value="txt2img" class="d-none"
+                           {{ 'checked' if (image and image.type == 'txt2img') or not image else '' }}>
+                </div>
+            </div>
+            <div class="col-6">
+                <div class="type-selector-card p-3 text-center {{ 'active' if image and image.type == 'img2img' else '' }}"
+                     data-type="img2img">
+                    <div class="check-badge"><i class="bi bi-check-lg small"></i></div>
+                    <i class="bi bi-images mb-2 d-block opacity-75 fs-4"></i>
+                    <span class="type-label small">图生图</span>
+                    <input type="radio" name="type" value="img2img" class="d-none"
+                           {{ 'checked' if image and image.type == 'img2img' else '' }}>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <div id="refUploadArea" class="mb-5 animate-up {{ 'd-none' if (not image) or (image.type != 'img2img') else '' }}" style="animation-delay: 0.15s;">
         <div class="d-flex justify-content-between align-items-end mb-3">
             <label class="form-label-apple mb-0">
                 参考图序列 <span class="label-badge optional">选填</span>
             </label>
-            <button type="button" class="btn btn-sm btn-white border shadow-sm rounded-pill px-3 fw-bold text-primary" id="btnAddRef" style="font-size: 0.8rem;">
-                <i class="bi bi-plus-lg me-1"></i>添加图片
-            </button>
+            <div class="d-flex gap-2">
+                <button type="button" class="btn btn-sm btn-light border shadow-sm rounded-pill px-3 fw-bold text-secondary" id="btnAddPlaceholder" style="font-size: 0.8rem;">
+                    <i class="bi bi-bounding-box-circles me-1"></i>插入变量
+                </button>
+                <button type="button" class="btn btn-sm btn-white border shadow-sm rounded-pill px-3 fw-bold text-primary" id="btnAddRef" style="font-size: 0.8rem;">
+                    <i class="bi bi-plus-lg me-1"></i>添加图片
+                </button>
+            </div>
         </div>
 
         <input type="file" id="tempRefInput" class="d-none" accept="image/*" multiple>
@@ -147,3 +164,63 @@
         </button>
     </div>
 </form>
+
+<style>
+.segmented-control-capsule {
+    position: relative;
+    display: inline-flex;
+    background: rgba(118, 118, 128, 0.12);
+    padding: 3px;
+    border-radius: 50rem;
+    user-select: none;
+    min-width: 140px;
+    height: 36px;
+}
+
+.segmented-control-capsule input {
+    display: none;
+}
+
+.segmented-control-capsule label {
+    position: relative;
+    z-index: 2;
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: var(--text-secondary);
+    cursor: pointer;
+    border-radius: 50rem;
+    transition: color 0.3s ease;
+    white-space: nowrap;
+}
+
+.segmented-control-capsule input:checked + label {
+    color: var(--text-primary);
+    font-weight: 600;
+}
+
+.segmented-control-capsule .indicator {
+    position: absolute;
+    top: 3px;
+    bottom: 3px;
+    left: 3px;
+    width: calc(50% - 3px);
+    background: #ffffff;
+    border-radius: 50rem;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.12), 0 0 1px rgba(0,0,0,0.05);
+    z-index: 1;
+    transition: transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+[data-theme="dark"] .segmented-control-capsule .indicator {
+    background: #636366;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+}
+
+#cat_template:checked ~ .indicator {
+    transform: translateX(100%);
+}
+</style>

@@ -11,13 +11,13 @@
             </div>
 
             <div class="nav-category">Library</div>
-            <a href="{{ url_for('public.index') }}" class="nav-item-apple {{ 'active' if not active_tag else '' }}">
+            <a href="{{ url_for(request.endpoint) }}" class="nav-item-apple {{ 'active' if not active_tag else '' }}">
                 <i class="bi bi-grid-fill me-3 small"></i>All Photos
             </a>
 
             <div class="nav-category mt-4">Tags</div>
             {% for tag in all_tags %}
-            <a href="{{ url_for('public.index', tag=tag.name) }}" class="nav-item-apple {{ 'active' if active_tag == tag.name else '' }}">
+            <a href="{{ url_for(request.endpoint, tag=tag.name) }}" class="nav-item-apple {{ 'active' if active_tag == tag.name else '' }}">
                 <i class="bi bi-hash me-3 small opacity-50"></i>{{ tag.name }}
             </a>
             {% endfor %}
@@ -29,7 +29,7 @@
         <div class="px-4 px-lg-5 pt-5 pb-4 d-flex flex-wrap justify-content-between align-items-end">
             <div class="mb-3 mb-md-0">
                 <h1 class="fw-bold mb-1 art-title" style="font-size: 2.5rem; letter-spacing: -1px;">
-                    {{ active_tag or 'Collection' }}
+                    {{ active_tag or ('Templates' if request.endpoint == 'public.templates_index' else 'Collection') }}
                 </h1>
                 <p class="m-0 small" style="color: var(--text-secondary);">
                     {{ pagination.total }} pieces of art
@@ -37,7 +37,7 @@
             </div>
 
             <div class="d-block w-100 w-md-auto mt-2 mt-md-0" style="max-width: 400px;">
-                <form action="{{ url_for('public.index') }}" method="get">
+                <form action="{{ url_for(request.endpoint) }}" method="get">
                     <div class="position-relative">
                         <i class="bi bi-search position-absolute top-50 start-0 translate-middle-y ms-3 text-muted"></i>
                         <input type="text" name="q" value="{{ active_search or '' }}"
@@ -45,20 +45,23 @@
                                placeholder="Search..."
                                style="width: 100%; padding-left: 2.5rem; background: var(--sidebar-bg); color: var(--text-primary);">
                         <input type="hidden" name="sort" value="{{ current_sort }}">
+                        {% if active_tag %}
+                        <input type="hidden" name="tag" value="{{ active_tag }}">
+                        {% endif %}
                     </div>
                 </form>
 
                 <div class="w-100 d-flex justify-content-end mt-3 px-1">
                     <nav class="segmented-control shadow-sm">
-                        <a href="{{ url_for('public.index', sort='date', tag=active_tag, q=active_search) }}"
+                        <a href="{{ url_for(request.endpoint, sort='date', tag=active_tag, q=active_search) }}"
                            class="nav-link {{ 'active' if current_sort == 'date' else '' }}">
                            <i class="bi bi-clock-history"></i> <span>最新</span>
                         </a>
-                        <a href="{{ url_for('public.index', sort='hot', tag=active_tag, q=active_search) }}"
+                        <a href="{{ url_for(request.endpoint, sort='hot', tag=active_tag, q=active_search) }}"
                            class="nav-link {{ 'active' if current_sort == 'hot' else '' }}">
                            <i class="bi bi-fire"></i> <span>热度</span>
                         </a>
-                        <a href="{{ url_for('public.index', sort='random', tag=active_tag, q=active_search) }}"
+                        <a href="{{ url_for(request.endpoint, sort='random', tag=active_tag, q=active_search) }}"
                            class="nav-link {{ 'active' if current_sort == 'random' else '' }}">
                            <i class="bi bi-shuffle"></i> <span>随机</span>
                         </a>
@@ -72,8 +75,7 @@
                 {% for img in images %}
                 <div class="gallery-item group">
                     <div class="art-frame cursor-zoom" onclick="showDetail(this)">
-                        
-                        {# 数据嵌入：用于 JS 读取详情 #}
+
                         <script type="application/json" class="img-data">
                             {{ img.to_dict() | tojson | safe }}
                         </script>
@@ -125,20 +127,17 @@
         {% if pagination.pages > 1 %}
         <div class="pagination-container">
             <nav class="pagination-modern">
-                {# --- 上一页按钮 --- #}
                 <a class="page-link-item {% if not pagination.has_prev %}disabled{% endif %}"
-                   href="{{ url_for('public.index', page=pagination.prev_num, tag=active_tag, q=active_search, sort=current_sort) }}"
+                   href="{{ url_for(request.endpoint, page=pagination.prev_num, tag=active_tag, q=active_search, sort=current_sort) }}"
                    title="Previous">
                     <i class="bi bi-chevron-left small"></i>
                 </a>
 
-                {# --- 智能页码循环 --- #}
-                {# iter_pages : left_edge=1(左边保留1个), right_edge=1(右边保留1个), left_current=1(当前页左边保留1个), right_current=1(当前页右边保留1个) #}
                 {% for page_num in pagination.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
                     {% if page_num %}
                         {% if page_num != pagination.page %}
                             <a class="page-link-item"
-                               href="{{ url_for('public.index', page=page_num, tag=active_tag, q=active_search, sort=current_sort) }}">
+                               href="{{ url_for(request.endpoint, page=page_num, tag=active_tag, q=active_search, sort=current_sort) }}">
                                 {{ page_num }}
                             </a>
                         {% else %}
@@ -149,9 +148,8 @@
                     {% endif %}
                 {% endfor %}
 
-                {# --- 下一页按钮 --- #}
                 <a class="page-link-item {% if not pagination.has_next %}disabled{% endif %}"
-                   href="{{ url_for('public.index', page=pagination.next_num, tag=active_tag, q=active_search, sort=current_sort) }}"
+                   href="{{ url_for(request.endpoint, page=pagination.next_num, tag=active_tag, q=active_search, sort=current_sort) }}"
                    title="Next">
                     <i class="bi bi-chevron-right small"></i>
                 </a>
@@ -173,12 +171,12 @@
     </div>
     <div class="offcanvas-body custom-scrollbar">
         <div class="nav-category mt-0">Library</div>
-        <a href="{{ url_for('public.index') }}" class="nav-item-apple {{ 'active' if not active_tag else '' }}">
+        <a href="{{ url_for(request.endpoint) }}" class="nav-item-apple {{ 'active' if not active_tag else '' }}">
             <i class="bi bi-grid-fill me-3 small"></i>全部作品
         </a>
         <div class="nav-category mt-4">Tags</div>
         {% for tag in all_tags %}
-        <a href="{{ url_for('public.index', tag=tag.name) }}" class="nav-item-apple {{ 'active' if active_tag == tag.name else '' }}">
+        <a href="{{ url_for(request.endpoint, tag=tag.name) }}" class="nav-item-apple {{ 'active' if active_tag == tag.name else '' }}">
             <i class="bi bi-hash me-3 small opacity-50"></i>{{ tag.name }}
         </a>
         {% endfor %}

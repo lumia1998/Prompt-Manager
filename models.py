@@ -3,7 +3,6 @@ from datetime import datetime
 from extensions import db
 from flask import request
 
-# 多对多关联表：图片与标签
 image_tags = db.Table('image_tags',
                       db.Column('image_id', db.Integer, db.ForeignKey('image.id')),
                       db.Column('tag_id', db.Integer, db.ForeignKey('tag.id'))
@@ -30,6 +29,9 @@ class Image(db.Model):
     status = db.Column(db.String(20), default='pending', index=True)
     created_at = db.Column(db.DateTime, default=datetime.now)
 
+    # 作品分类: gallery / template
+    category = db.Column(db.String(20), default='gallery', index=True)
+
     # 统计数据
     views_count = db.Column(db.Integer, default=0)
     copies_count = db.Column(db.Integer, default=0)
@@ -52,6 +54,15 @@ class Image(db.Model):
             # 本地路径，拼接当前请求的域名
             return request.url_root.rstrip('/') + path
 
+        # 构造参考图列表
+        refs_data = []
+        for r in self.refs:
+            refs_data.append({
+                "id": r.id,
+                "file_path": _get_full_url(r.file_path) if r.file_path else "",
+                "is_placeholder": r.is_placeholder
+            })
+
         return {
             "id": self.id,
             "title": self.title,
@@ -59,6 +70,7 @@ class Image(db.Model):
             "prompt": self.prompt,
             "description": self.description,
             "type": self.type,
+            "category": self.category,
 
             # 主图和缩略图都处理成绝对路径
             "file_path": _get_full_url(self.file_path),
@@ -66,8 +78,8 @@ class Image(db.Model):
 
             "tags": [t.name for t in self.tags],
 
-            # 参考图列表也处理成绝对路径
-            "refs": [_get_full_url(r.file_path) for r in self.refs],
+            # 参考图列表
+            "refs": refs_data,
 
             "heat_score": self.heat_score,
             "created_at": self.created_at.isoformat()
@@ -78,8 +90,9 @@ class ReferenceImage(db.Model):
     """参考图模型"""
     id = db.Column(db.Integer, primary_key=True)
     image_id = db.Column(db.Integer, db.ForeignKey('image.id'), nullable=False)
-    file_path = db.Column(db.String(255), nullable=False)
+    file_path = db.Column(db.String(255), nullable=True)
     position = db.Column(db.Integer, default=0)
+    is_placeholder = db.Column(db.Boolean, default=False)
 
 
 class Tag(db.Model):

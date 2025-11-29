@@ -35,12 +35,16 @@
     <nav class="navbar fixed-top w-100 p-0 apple-navbar">
         <div class="container-fluid px-4 py-2 d-flex justify-content-between align-items-center h-100">
             <div class="d-flex align-items-center gap-1 nav-main-left flex-nowrap">
-                <a href="{{ url_for('public.index') }}" class="nav-pill-link {{ 'active' if request.endpoint == 'public.index' and not request.args.get('tag') else '' }}">
+                <a href="{{ url_for('public.index') }}" class="nav-pill-link {{ 'active' if request.endpoint == 'public.index' else '' }}">
                     <i class="bi bi-grid-fill me-2"></i>画廊
                 </a>
 
-                {% if request.endpoint == 'public.index' %}
-                <a href="#" class="nav-pill-link d-md-none {{ 'active' if request.args.get('tag') else '' }}" data-bs-toggle="offcanvas" data-bs-target="#mobileTagSidebar">
+                <a href="{{ url_for('public.templates_index') }}" class="nav-pill-link {{ 'active' if request.endpoint == 'public.templates_index' else '' }}">
+                    <i class="bi bi-magic me-2"></i>模板
+                </a>
+
+                {% if request.endpoint in ['public.index', 'public.templates_index'] %}
+                <a href="#" class="nav-pill-link d-md-none" data-bs-toggle="offcanvas" data-bs-target="#mobileTagSidebar">
                     <i class="bi bi-funnel-fill me-2"></i>筛选
                 </a>
                 {% endif %}

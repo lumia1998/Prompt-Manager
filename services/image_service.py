@@ -19,6 +19,7 @@ class ImageService:
                 prompt=data.get('prompt'),
                 description=data.get('description', '').strip(),
                 type=data.get('type'),
+                category=data.get('category', 'gallery'),
                 file_path=web_path,
                 thumbnail_path=thumb_path,
                 status=data.get('status', 'pending')
@@ -30,8 +31,13 @@ class ImageService:
             db.session.add(image)
             db.session.flush()
 
-            if image.type == 'img2img' and ref_files:
-                ImageService._process_refs(image, ref_files, start_pos=0)
+            if image.type == 'img2img':
+                # 处理参考图布局 (create时也可能包含占位符)
+                ref_layout_str = data.get('ref_layout')
+                if ref_layout_str:
+                    ImageService._process_layout_refs(image, ref_layout_str, ref_files)
+                elif ref_files:
+                    ImageService._process_refs(image, ref_files, start_pos=0)
 
             db.session.commit()
             return image
@@ -44,22 +50,23 @@ class ImageService:
 
     @staticmethod
     def update_image(image_id, data, new_main_file=None, new_ref_files=None, deleted_ref_ids=None):
-        """更新作品信息，包括文件替换和参考图管理"""
+        """更新作品信息"""
         image = db.session.get(Image, image_id)
         if not image:
             raise ValueError("Image not found")
 
-        # 1. 更新基础信息
+        # 基础信息
         image.title = data.get('title')
         image.author = data.get('author')
         image.prompt = data.get('prompt')
         image.description = data.get('description')
         image.type = data.get('type')
+        image.category = data.get('category')
         image.status = data.get('status')
 
         upload_folder = current_app.config['UPLOAD_FOLDER']
 
-        # 2. 替换主图
+        # 替换主图
         if new_main_file and new_main_file.filename:
             old_files = [image.file_path, image.thumbnail_path]
             web_path, thumb_path = process_image(new_main_file, upload_folder)
@@ -69,47 +76,27 @@ class ImageService:
             for p in old_files:
                 remove_physical_file(p)
 
-        # 3. 更新标签
+        # 更新标签
         if 'tags' in data:
             image.tags = []
             ImageService._apply_tags(image, data['tags'])
 
-        # 4. 删除指定的参考图
+        # 删除参考图
         if deleted_ref_ids:
             for ref_id in deleted_ref_ids:
                 if not ref_id: continue
                 ref = db.session.get(ReferenceImage, int(ref_id))
                 if ref and ref.image_id == image.id:
-                    remove_physical_file(ref.file_path)
+                    if ref.file_path:
+                        remove_physical_file(ref.file_path)
                     db.session.delete(ref)
             db.session.flush()
 
-        # 5. 处理参考图排序和新增
+        # 处理参考图布局
         ref_layout_str = data.get('ref_layout')
         if ref_layout_str:
-            try:
-                layout = json.loads(ref_layout_str)
-                new_file_iter = iter(new_ref_files or [])
-
-                for index, item_key in enumerate(layout):
-                    if item_key == 'new':
-                        try:
-                            f = next(new_file_iter)
-                            if f and f.filename:
-                                path, _ = process_image(f, upload_folder)
-                                ref = ReferenceImage(image_id=image.id, file_path=path, position=index)
-                                db.session.add(ref)
-                        except StopIteration:
-                            pass
-                    elif item_key.startswith('existing:'):
-                        ref_id = int(item_key.split(':')[1])
-                        ref = db.session.get(ReferenceImage, ref_id)
-                        if ref and ref.image_id == image.id:
-                            ref.position = index
-            except Exception as e:
-                current_app.logger.error(f"Layout parse error: {e}")
+            ImageService._process_layout_refs(image, ref_layout_str, new_ref_files)
         else:
-            # 降级处理：直接追加
             max_pos = db.session.query(db.func.max(ReferenceImage.position)).filter_by(image_id=image.id).scalar() or 0
             if new_ref_files:
                 ImageService._process_refs(image, new_ref_files, start_pos=max_pos + 1)
@@ -119,12 +106,14 @@ class ImageService:
 
     @staticmethod
     def delete_image(image_id):
-        """完全删除作品及其关联文件"""
+        """删除作品"""
         image = db.session.get(Image, image_id)
         if not image: return False
 
         files_to_remove = [image.file_path, image.thumbnail_path]
-        files_to_remove.extend([r.file_path for r in image.refs])
+        for r in image.refs:
+            if r.file_path:
+                files_to_remove.append(r.file_path)
 
         tags = list(image.tags)
 
@@ -137,7 +126,6 @@ class ImageService:
         ImageService._clean_orphaned_tags(tags)
         return True
 
-    # --- Helpers ---
     @staticmethod
     def _apply_tags(image, tags_str):
         if not tags_str: return
@@ -156,10 +144,43 @@ class ImageService:
             if f.filename:
                 try:
                     path, _ = process_image(f, upload_folder)
-                    ref = ReferenceImage(image_id=image.id, file_path=path, position=start_pos + i)
+                    ref = ReferenceImage(image_id=image.id, file_path=path, position=start_pos + i,
+                                         is_placeholder=False)
                     db.session.add(ref)
                 except:
                     pass
+
+    @staticmethod
+    def _process_layout_refs(image, layout_str, new_files):
+        """解析参考图布局，处理占位符和新文件"""
+        try:
+            layout = json.loads(layout_str)
+            new_file_iter = iter(new_files or [])
+            upload_folder = current_app.config['UPLOAD_FOLDER']
+
+            for index, item_key in enumerate(layout):
+                if item_key == 'new':
+                    try:
+                        f = next(new_file_iter)
+                        if f and f.filename:
+                            path, _ = process_image(f, upload_folder)
+                            ref = ReferenceImage(image_id=image.id, file_path=path, position=index,
+                                                 is_placeholder=False)
+                            db.session.add(ref)
+                    except StopIteration:
+                        pass
+
+                elif item_key == 'placeholder':
+                    ref = ReferenceImage(image_id=image.id, file_path='', position=index, is_placeholder=True)
+                    db.session.add(ref)
+
+                elif item_key.startswith('existing:'):
+                    ref_id = int(item_key.split(':')[1])
+                    ref = db.session.get(ReferenceImage, ref_id)
+                    if ref and ref.image_id == image.id:
+                        ref.position = index
+        except Exception as e:
+            current_app.logger.error(f"Layout parse error: {e}")
 
     @staticmethod
     def _clean_orphaned_tags(tags):
