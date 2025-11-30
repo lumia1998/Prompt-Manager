@@ -34,6 +34,33 @@
     * **本地化运行**：所有数据均存储在本地，确保数据主权。
     * **敏感内容控制**：提供敏感内容（NSFW）遮罩开关，管理员可通过配置文件控制访客权限。
 
+## ✨ 界面预览
+
+<p align="center">
+  <img src="assets/screenshot_detail.png" alt="Interactive Detail View" width="100%">
+</p>
+
+<table border="0">
+  <tr>
+    <td width="50%">
+      <h3 align="center">沉浸式画廊</h3>
+      <img src="assets/screenshot_gallery.png" alt="Gallery View" width="100%">
+    </td>
+    <td width="50%">
+      <h3 align="center">高级工作流</h3>
+      <img src="assets/screenshot_upload.png" alt="Upload & Sort" width="100%">
+    </td>
+  </tr>
+</table>
+
+<p align="center">
+  <img src="assets/screenshot_admin.png" alt="Admin Dashboard" width="100%">
+  <br>
+  <em>现代化后台管理与审核系统</em>
+</p>
+
+---
+
 ##  安装与启动
 
 本项目基于 Python Flask 开发。
