@@ -1,0 +1,13 @@
+version: '3.8'
+
+services:
+  prompt-manager:
+    build: .
+    ports:
+      - "45000:5000"
+    volumes:
+      - ./instance:/app/instance
+      - ./static/uploads:/app/static/uploads
+    env_file:
+      - .env
+    restart: unless-stopped
