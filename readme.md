@@ -133,7 +133,12 @@ gunicorn -w 4 -b 0.0.0.0:5000 app:app
 如果您熟悉 Docker，可以使用 Docker Compose 快速启动服务。
 
 1.  **确保已安装 Docker 和 Docker Compose**。
-2.  **启动服务**：
+2.  **创建数据目录** (防止权限问题)：
+    ```bash
+    mkdir -p instance
+    mkdir -p static/uploads
+    ```
+3.  **启动服务**：
     ```bash
     docker compose up -d --build
     ```

@@ -2,6 +2,7 @@ version: '3.8'
 
 services:
   prompt-manager:
+    container_name: prompt-manager
     build: .
     ports:
       - "45000:5000"
