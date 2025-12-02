@@ -128,6 +128,21 @@ gunicorn -w 4 -b 0.0.0.0:5000 app:app
 
 启动后，访问浏览器 `http://localhost:5000` 即可开始使用。
 
+### 5. Docker 部署 (推荐)
+
+如果您熟悉 Docker，可以使用 Docker Compose 快速启动服务。
+
+1.  **确保已安装 Docker 和 Docker Compose**。
+2.  **启动服务**：
+    ```bash
+    docker compose up -d --build
+    ```
+3.  **访问应用**：
+    打开浏览器访问 `http://localhost:45000`。
+    - 默认管理员账号：`admin`
+    - 默认密码：`admin` (可在 `.env` 中修改)
+
+
 ##  使用指南
 
 1.  **发布作品**：点击页面右上角的“上传”按钮。填写提示词（Prompt），如果是图生图作品，可以上传多张参考图并拖拽调整顺序。
