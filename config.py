@@ -5,6 +5,10 @@ basedir = os.path.abspath(os.path.dirname(__file__))
 load_dotenv(os.path.join(basedir, '.env'))
 
 
+def _str_to_bool(s):
+    return str(s).lower() == 'true'
+
+
 class Config:
     """应用全局配置"""
     SECRET_KEY = os.environ.get('SECRET_KEY') or 'dev-key-please-change-in-prod'
@@ -33,10 +37,6 @@ class Config:
     # 图片处理参数 (本地模式用)
     IMG_MAX_DIMENSION = int(os.environ.get('IMG_MAX_DIMENSION') or 1600)
     IMG_QUALITY = int(os.environ.get('IMG_QUALITY') or 85)
-
-    @staticmethod
-    def _str_to_bool(s):
-        return str(s).lower() == 'true'
 
     ENABLE_IMG_COMPRESS = _str_to_bool(os.environ.get('ENABLE_IMG_COMPRESS', 'True'))
     USE_THUMBNAIL_IN_PREVIEW = _str_to_bool(os.environ.get('USE_THUMBNAIL_IN_PREVIEW', 'True'))
