@@ -15,6 +15,16 @@ def create_app(config_class=Config):
     app = Flask(__name__)
     app.config.from_object(config_class)
 
+    # 确保 instance 目录存在
+    instance_path = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'instance')
+    if not os.path.exists(instance_path):
+        try:
+            os.makedirs(instance_path)
+            print(f"Created instance directory at: {instance_path}")
+        except OSError as e:
+            print(f"Failed to create instance directory: {e}")
+
+
     # 修复 Flask 3.0+ JSON 中文显示
     app.json.ensure_ascii = False
 
